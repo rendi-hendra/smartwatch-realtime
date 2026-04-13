@@ -59,6 +59,9 @@ class HealthConnectManager(private val context: Context) {
                 timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
             )
         )
-        return response.records.lastOrNull()?.percentage
+        return response.records
+            .lastOrNull()
+            ?.percentage
+            ?.value
     }
 }

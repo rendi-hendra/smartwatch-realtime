@@ -19,7 +19,7 @@ class MainActivity : AppCompatActivity() {
     private var socket: Socket? = null
 
     // Replace with your local machine IP if testing on a real device
-    private val BACKEND_URL = "http://10.0.2.2:3000"
+    private val BACKEND_URL = "http://192.168.100.17:3000"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,14 +68,15 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             while (true) {
                 try {
-                    val hr = healthConnectManager.readHeartRate()
-                    val steps = healthConnectManager.readSteps()
-                    val spo2 = healthConnectManager.readSpO2()
-
+                    // Generate Dummy Data for Testing
+                    val hr = (60..100).random()
+                    val steps = (0..10000).random()
+                    val spo2 = (95..99).random() + Math.random()
+                    
                     val data = JSONObject().apply {
-                        put("hr", hr ?: 0)
-                        put("steps", steps ?: 0)
-                        put("spo2", spo2 ?: 0.0)
+                        put("hr", hr)
+                        put("steps", steps)
+                        put("spo2", String.format("%.1f", spo2))
                         put("timestamp", System.currentTimeMillis())
                     }
 

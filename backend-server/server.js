@@ -29,7 +29,13 @@ io.on('connection', (socket) => {
     });
 });
 
+// const PORT = process.env.PORT ||  "http://192.168.100.17:3000";
+// server.listen(PORT, '0.0.0.0', () => {
+//     console.log(`Backend server running on port ${PORT}`);
+// });
+
 const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend server running on port ${PORT}`);
 });
