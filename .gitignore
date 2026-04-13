@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# JS Dependencies
+node_modules/
+backend-server/node_modules/
+web-dashboard/node_modules/
+dist/
+web-dashboard/dist/
