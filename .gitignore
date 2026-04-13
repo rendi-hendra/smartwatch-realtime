@@ -1,5 +1,19 @@
+.cxx
+local.properties
+
+# JS Dependencies
+**/node_modules/
+**/dist/
+**/build/
+.env*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Android
 *.iml
-.gradle
+.gradle/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -8,15 +22,7 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+/build/
+/captures/
+.externalNativeBuild/
 
-# JS Dependencies
-node_modules/
-backend-server/node_modules/
-web-dashboard/node_modules/
-dist/
-web-dashboard/dist/
