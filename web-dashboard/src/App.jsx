@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onValue } from "firebase/database";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -23,7 +24,19 @@ ChartJS.register(
   Legend
 );
 
-const socket = io('http://localhost:3000');
+// Firebase configuration using credentials from google-services.json
+const firebaseConfig = {
+    apiKey: "AIzaSyAIPrwe0hso2CyBpEW0_bVyrTNPor1Orkk",
+    authDomain: "smartwatch-e626c.firebaseapp.com",
+    databaseURL: "https://smartwatch-e626c-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "smartwatch-e626c",
+    storageBucket: "smartwatch-e626c.appspot.com",
+    messagingSenderId: "211747187668",
+    appId: "1:211747187668:web:placeholder" // Replace with actual Web App ID if different
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 function App() {
   const [healthData, setHealthData] = useState({
@@ -34,14 +47,20 @@ function App() {
   });
 
   useEffect(() => {
-    socket.on('web_dashboard_update', (data) => {
-      setHealthData((prev) => ({
-        ...data,
-        history: [...prev.history, { t: data.timestamp, hr: data.hr }].slice(-20)
-      }));
+    const dataRef = ref(db, 'smartwatch_data/current');
+    
+    // Subscribe to Firebase updates
+    const unsubscribe = onValue(dataRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setHealthData((prev) => ({
+          ...data,
+          history: [...prev.history, { t: data.timestamp, hr: data.hr }].slice(-20)
+        }));
+      }
     });
 
-    return () => socket.off('web_dashboard_update');
+    return () => unsubscribe();
   }, []);
 
   const chartData = {
@@ -79,7 +98,7 @@ function App() {
       <header className="dashboard-header">
         <h1>Smartwatch Real-Time Monitor</h1>
         <div className="status">
-          <span className="dot"></span> Live Monitoring
+          <span className="dot"></span> Live Monitoring (via Firebase)
         </div>
       </header>
 
