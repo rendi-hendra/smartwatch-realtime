@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "211747187668",
+    "project_id": "smartwatch-e626c",
+    "storage_bucket": "smartwatch-e626c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:211747187668:android:0f052438587bed850bc441",
+        "android_client_info": {
+          "package_name": "com.smartwatch"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIPrwe0hso2CyBpEW0_bVyrTNPor1Orkk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

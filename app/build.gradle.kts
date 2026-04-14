@@ -1,16 +1,17 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    id("com.google.gms.google-services")
 }
 
 android {
-    namespace = "com.example.smartwatch_realtime"
+    namespace = "com.smartwatch"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.smartwatch_realtime"
+        applicationId = "com.smartwatch"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -38,6 +39,8 @@ android {
 }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
+    implementation("com.google.firebase:firebase-analytics")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
