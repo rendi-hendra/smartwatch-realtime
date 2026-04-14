@@ -86,13 +86,3 @@ graph LR
 3. Tambahkan **SHA-1 Fingerprint** (Dari menu Gradle -> Task -> android -> signingReport) ke setting project Anda di Firebase (Wajib untuk OS Android Moderen).
 4. Pastikan aplikasi/wearable OS emulator yang akan di*run* sudah memiliki aplikasi resmi "Health Connect" di bawaannya.
 5. Klik **Run / Play** pada Android Studio. Posisikan switch *Connect* menjadi `ON` lalu berikan semua perizinan layar sentuh untuk menambang sensor.
-
----
-
-## 📐 Rencana/Gagasan Kedepan
-- [ ] Implementasi login autentikasi terpisah (Firebase Auth).
-- [ ] Menambahkan notifikasi Alert saat detak Jantung (HR) berada pada angka kritis ( > 160 BPM / < 40 BPM).
-- [ ] Firebase Cloud Functions *CronJob* – Otomatis meringkas (Summarize) data harian menjadi satu dokumen hemat di batas tengah malam agar *cost read database* super ringan seiring bertambahnya bulan.
-
----
-*Dibuat untuk memudahkan penelitian infrastruktur sensor hardware dan telemetri jarak jauh secara mulus.*
