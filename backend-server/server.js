@@ -1,41 +1,54 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
 const cors = require('cors');
+const admin = require('firebase-admin');
+
+// IMPORTANT: Ensure serviceAccountKey.json is present in the backend-server directory.
+// You can download this from Firebase Console -> Project Settings -> Service Accounts.
+let serviceAccount;
+try {
+    serviceAccount = require("./serviceAccountKey.json");
+} catch (e) {
+    console.warn("WARNING: serviceAccountKey.json not found. Firebase Admin will not be initialized correctly.");
+}
 
 const app = express();
 app.use(cors());
+app.use(express.json()); // Essential for parsing POST body
 
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
+if (serviceAccount) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: "https://smartwatch-e626c-default-rtdb.asia-southeast1.firebasedatabase.app" // Regional URL
+    });
+    console.log("Firebase Admin initialized.");
+}
+
+const db = admin.apps.length > 0 ? admin.database() : null;
+
+// Endpoint for Smartwatch to send data
+app.post('/api/sensor-data', async (req, res) => {
+    const data = req.body;
+    console.log('Received sensor data via POST:', data);
+
+    if (!db) {
+        return res.status(500).send({ error: "Firebase not initialized" });
+    }
+
+    try {
+        // Update the current state in Firebase
+        await db.ref('smartwatch_data/current').set({
+            ...data,
+            server_timestamp: admin.database.ServerValue.TIMESTAMP
+        });
+        res.status(200).send({ message: "Data synchronized to Firebase" });
+    } catch (error) {
+        console.error("Error writing to Firebase:", error);
+        res.status(500).send({ error: "Failed to write to Firebase" });
     }
 });
 
-io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
-
-    // Listen for data from Smartwatch
-    socket.on('sensor_data', (data) => {
-        console.log('Received sensor data:', data);
-        // Broadcast to Web Dashboard
-        io.emit('web_dashboard_update', data);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-    });
-});
-
-// const PORT = process.env.PORT ||  "http://192.168.100.17:3000";
-// server.listen(PORT, '0.0.0.0', () => {
-//     console.log(`Backend server running on port ${PORT}`);
-// });
-
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend server running on port ${PORT}`);
 });

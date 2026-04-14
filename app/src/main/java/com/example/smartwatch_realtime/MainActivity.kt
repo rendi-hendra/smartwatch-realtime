@@ -11,16 +11,14 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.materialswitch.MaterialSwitch
-import io.socket.client.IO
-import io.socket.client.Socket
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.json.JSONObject
+import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : AppCompatActivity() {
     private lateinit var healthConnectManager: HealthConnectManager
-    private var socket: Socket? = null
+    private val db by lazy { FirebaseFirestore.getInstance() }
     private var pollingJob: Job? = null
 
     // UI Elements
@@ -30,9 +28,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSpo2: TextView
     private lateinit var tvDebug: TextView
     private lateinit var switchConnect: MaterialSwitch
-
-    // Use 10.0.2.2 to connect to host machine from Android Emulator
-    private val BACKEND_URL = "http://10.0.2.2:3000"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,7 +39,11 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        healthConnectManager = HealthConnectManager(this)
+        try {
+            healthConnectManager = HealthConnectManager(this)
+        } catch (e: Exception) {
+            Log.e("SmartwatchApp", "Failed to init HealthConnectManager", e)
+        }
         initUI()
     }
 
@@ -58,7 +57,13 @@ class MainActivity : AppCompatActivity() {
 
         switchConnect.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                startService()
+                try {
+                    startService()
+                } catch (e: Exception) {
+                    Log.e("SmartwatchApp", "Crash prevented in startService", e)
+                    tvDebug.text = "Error: ${e.localizedMessage}"
+                    switchConnect.isChecked = false
+                }
             } else {
                 stopService()
             }
@@ -66,50 +71,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startService() {
-        tvStatus.text = "Connecting..."
-        tvStatus.setTextColor(Color.YELLOW)
-        setupSocket()
+        tvStatus.text = "Service Running"
+        tvStatus.setTextColor(Color.GREEN)
+        
+        // Ensure healthConnectManager was successfully initialized in onCreate
+        if (!::healthConnectManager.isInitialized) {
+            throw IllegalStateException("Health Connect Manager not initialized. Device might not support it.")
+        }
+        
+        testFirestoreConnection() // 🔍 Cek koneksi ke Firestore segera
         checkPermissionsAndStart()
+    }
+
+    private fun testFirestoreConnection() {
+        tvDebug.text = "Testing Firestore..."
+        val testData = hashMapOf("status" to "online", "timestamp" to System.currentTimeMillis())
+        db.collection("connectivity_test")
+            .add(testData)
+            .addOnSuccessListener {
+                Log.d("FIREBASE", "Koneksi Firestore OK!")
+                tvDebug.text = "Firestore: Connected"
+            }
+            .addOnFailureListener { e ->
+                Log.e("FIREBASE", "Koneksi Firestore GAGAL: ${e.message}", e)
+                tvDebug.text = "Firestore Error: ${e.localizedMessage}"
+            }
     }
 
     private fun stopService() {
         pollingJob?.cancel()
-        socket?.disconnect()
         tvStatus.text = "Disconnected"
         tvStatus.setTextColor(Color.parseColor("#B0B0B0"))
         tvDebug.text = "Service stopped"
-    }
-
-    private fun setupSocket() {
-        try {
-            socket = IO.socket(BACKEND_URL)
-            socket?.on(Socket.EVENT_CONNECT) {
-                runOnUiThread {
-                    tvStatus.text = "Connected"
-                    tvStatus.setTextColor(Color.GREEN)
-                    tvDebug.text = "Listening for sensor data..."
-                }
-            }
-            socket?.on(Socket.EVENT_DISCONNECT) {
-                runOnUiThread {
-                    tvStatus.text = "Disconnected"
-                    tvStatus.setTextColor(Color.parseColor("#B0B0B0"))
-                }
-            }
-            socket?.on(Socket.EVENT_CONNECT_ERROR) { args ->
-                runOnUiThread {
-                    val error = args.getOrNull(0)?.toString() ?: "Unknown error"
-                    tvStatus.text = "Error"
-                    tvStatus.setTextColor(Color.RED)
-                    tvDebug.text = "Connection failed: $error"
-                    Log.e("SmartwatchApp", "Connection error: $error")
-                }
-            }
-            socket?.connect()
-            Log.d("SmartwatchApp", "Connecting to socket...")
-        } catch (e: Exception) {
-            Log.e("SmartwatchApp", "Socket connection failed", e)
-        }
     }
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -134,43 +127,60 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startDataPolling() {
-        pollingJob?.cancel() // Ensure no duplicate jobs
+        pollingJob?.cancel()
         pollingJob = lifecycleScope.launch {
             while (true) {
                 try {
-                    // Generate Dummy Data for Testing
+
                     val hr = (60..100).random()
                     val steps = (0..10000).random()
                     val spo2 = (95..99).random() + Math.random()
-                    
-                    val data = JSONObject().apply {
-                        put("hr", hr)
-                        put("steps", steps)
-                        put("spo2", String.format("%.1f", spo2))
-                        put("timestamp", System.currentTimeMillis())
-                    }
 
-                    // Update UI
+                    val spo2Formatted = String.format("%.1f", spo2)
+
+                    // UI update
                     runOnUiThread {
                         tvHR.text = hr.toString()
                         tvSteps.text = steps.toString()
-                        tvSpo2.text = String.format("%.1f", spo2)
-                        tvDebug.text = "Last sent: ${java.text.SimpleDateFormat("HH:mm:ss").format(java.util.Date())}"
+                        tvSpo2.text = spo2Formatted
                     }
 
-                    Log.d("SmartwatchApp", "Sending data: $data")
-                    socket?.emit("sensor_data", data)
+                    // 🔥 FIRESTORE CALL INI WAJIB
+                    sendDataToFirestore(hr, steps, spo2Formatted)
+
+                    Log.d("SmartwatchApp", "Sent to Firestore")
 
                 } catch (e: Exception) {
                     Log.e("SmartwatchApp", "Error polling data", e)
                 }
-                delay(5000) // Poll every 5 seconds
+
+                delay(5000)
             }
         }
     }
 
+    private fun sendDataToFirestore(hr: Int, steps: Int, spo2: String) {
+        val data = hashMapOf(
+            "hr" to hr,
+            "steps" to steps,
+            "spo2" to spo2,
+            "timestamp" to System.currentTimeMillis()
+        )
+
+        db.collection("sensor_data")
+            .add(data)
+            .addOnSuccessListener {
+                Log.d("FIREBASE", "Data terkirim")
+                tvDebug.text = "Sync OK (${java.text.SimpleDateFormat("HH:mm:ss").format(java.util.Date())})"
+            }
+            .addOnFailureListener { e ->
+                Log.e("FIREBASE", "Gagal kirim", e)
+                tvDebug.text = "Sync Fail: ${e.localizedMessage}"
+            }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        socket?.disconnect()
+        pollingJob?.cancel()
     }
 }

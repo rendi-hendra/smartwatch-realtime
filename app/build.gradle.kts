@@ -5,13 +5,13 @@ plugins {
 }
 
 android {
-    namespace = "com.smartwatch"
+    namespace = "com.example.smartwatch_realtime"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.smartwatch"
+        applicationId = "com.example.smartwatch_realtime"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -39,8 +39,10 @@ android {
 }
 
 dependencies {
-    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
-    implementation("com.google.firebase:firebase-analytics")
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.database)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
