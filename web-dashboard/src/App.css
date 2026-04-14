@@ -10,6 +10,7 @@
   --accent-primary: #3b82f6;
   --accent-hr: #ff4b5c;
   --accent-steps: #10b981;
+  --accent-spo2: #a8edea;
 }
 
 body {
@@ -56,10 +57,20 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  overflow-y: auto;
+}
+
+.section-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  font-weight: 700;
+  margin: 1rem 0 0.5rem 0.5rem;
 }
 
 .menu-item {
-  padding: 1rem 1.5rem;
+  padding: 0.875rem 1rem;
   border-radius: 0.75rem;
   cursor: pointer;
   font-weight: 600;
@@ -67,7 +78,8 @@ body {
   transition: all 0.2s;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
+  font-size: 0.95rem;
 }
 
 .menu-item:hover {
@@ -76,8 +88,14 @@ body {
 }
 
 .menu-item.active {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: var(--accent-primary);
+  background-color: rgba(255, 75, 92, 0.15);
+  color: var(--accent-hr);
+}
+
+.menu-item.active-history {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  box-shadow: inset 3px 0 0 var(--accent-primary);
 }
 
 .main-content {
@@ -91,7 +109,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .page-title h1 {
@@ -170,7 +188,7 @@ body {
 
 .color-hr { color: var(--accent-hr); }
 .color-steps { color: var(--accent-steps); }
-.color-spo2 { color: #a8edea; }
+.color-spo2 { color: var(--accent-spo2); }
 
 /* Chart Section */
 .analytics-section {
@@ -192,7 +210,7 @@ body {
   font-size: 1.25rem;
 }
 
-.filter-tabs {
+.metric-tabs {
   display: flex;
   gap: 0.5rem;
   background-color: var(--bg-color);
@@ -201,7 +219,7 @@ body {
   border: 1px solid var(--border-color);
 }
 
-.filter-btn {
+.metric-btn {
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -211,17 +229,32 @@ body {
   font-family: inherit;
   font-weight: 600;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.filter-btn:hover {
+.metric-btn:hover {
   color: var(--text-primary);
 }
 
-.filter-btn.active {
-  background-color: var(--card-bg);
-  color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+.metric-btn.active.tab-hr {
+  background-color: rgba(255, 75, 92, 0.15);
+  color: var(--accent-hr);
 }
+
+.metric-btn.active.tab-steps {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--accent-steps);
+}
+
+.metric-btn.active.tab-spo2 {
+  background-color: rgba(168, 237, 234, 0.15);
+  color: var(--accent-spo2);
+  color: #000; /* override lightness */
+}
+.metric-btn.active.tab-spo2 { color: var(--accent-spo2); } /* reoverride */
+
 
 .chart-wrapper {
   height: 350px;
@@ -230,9 +263,9 @@ body {
 
 @media (max-width: 1024px) {
   .admin-layout { flex-direction: column; }
-  .sidebar { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border-color); align-items: center; justify-content: space-between; padding-right: 1rem; }
+  .sidebar { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border-color); align-items: center; justify-content: space-between; padding-right: 1rem; height: auto;}
   .sidebar-header { padding: 1rem; border-bottom: none; }
-  .sidebar-menu { display: none; } /* Hide menu on mobile for simplicity, or make it a drawer */
+  .sidebar-menu { display: none; } /* Drawer for mobile if needed */
   .main-content { padding: 1.5rem; }
   .analytics-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
 }

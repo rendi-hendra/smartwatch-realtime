@@ -1,40 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from "firebase/app";
 import { 
-  getFirestore, 
-  collection, 
-  query, 
-  orderBy, 
-  limit, 
-  onSnapshot,
-  where
+  getFirestore, collection, query, orderBy, limit, onSnapshot, where
 } from "firebase/firestore";
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import './App.css';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-// Updated Firebase configuration using smartwatch-fb0ce
 const firebaseConfig = {
     apiKey: "AIzaSyCyJ-O61WVsFdj2blKFj4j9J20eZQ4j_6I",
     authDomain: "smartwatch-fb0ce.firebaseapp.com",
@@ -47,80 +23,122 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const formatDateLabel = (date) => {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+};
+
+const getPastDays = (numDays) => {
+  const days = [];
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+  return days;
+};
+
+const metricConfig = {
+  hr: { label: 'Heart Rate (BPM)', color: '#ff4b5c', bgColor: 'rgba(255, 75, 92, 0.15)', icon: '❤️', format: (val) => Number(val).toFixed(0) },
+  steps: { label: 'Total Steps', color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.15)', icon: '👟', format: (val) => Number(val).toLocaleString() },
+  spo2: { label: 'Blood Oxygen (%)', color: '#a8edea', bgColor: 'rgba(168, 237, 234, 0.15)', icon: '💨', format: (val) => Number(val).toFixed(1) }
+};
+
 function App() {
   const [currentData, setCurrentData] = useState({ hr: '--', steps: '--', spo2: '--' });
-  const [history, setHistory] = useState([]);
-  const [filter, setFilter] = useState('live'); // 'live', 'today', 'yesterday', 'week'
-  const [stats, setStats] = useState({ avgHr: 0, maxHr: 0 });
+  const [historyDocs, setHistoryDocs] = useState([]);
+  
+  // viewMode string format: 'live' | timestamp representing start of that day
+  const [viewMode, setViewMode] = useState('live'); 
+  const [activeMetric, setActiveMetric] = useState('hr'); // 'hr', 'steps', 'spo2'
+  const [stats, setStats] = useState({ avg: 0, max: 0 });
 
-  // 1. Live Data Listener (Always keeps the top cards updated)
+  // Generate sidebar dates once
+  const pastDays = useMemo(() => getPastDays(7), []);
+
   useEffect(() => {
     const q = query(collection(db, "sensor_data"), orderBy("timestamp", "desc"), limit(1));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(doc => doc.data());
-      if (docs.length > 0) {
-        setCurrentData(docs[0]);
-      }
+      if (docs.length > 0) setCurrentData(docs[0]);
     });
     return () => unsubscribe();
   }, []);
 
-  // 2. History Chart Listener (Based on active tab)
   useEffect(() => {
     let q;
     const coll = collection(db, "sensor_data");
-    const now = new Date();
 
-    if (filter === 'live') {
+    if (viewMode === 'live') {
       q = query(coll, orderBy("timestamp", "desc"), limit(40));
-    } else if (filter === 'today') {
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      q = query(coll, where("timestamp", ">=", startOfToday), orderBy("timestamp", "desc"), limit(300));
-    } else if (filter === 'yesterday') {
-      const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      q = query(coll, where("timestamp", ">=", startOfYesterday), where("timestamp", "<", startOfToday), orderBy("timestamp", "desc"), limit(300));
-    } else if (filter === 'week') {
-      const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).getTime();
-      q = query(coll, where("timestamp", ">=", startOfWeek), orderBy("timestamp", "desc"), limit(600));
+    } else {
+      const startOfDay = new Date(parseInt(viewMode, 10));
+      startOfDay.setHours(0,0,0,0);
+      const startTs = startOfDay.getTime();
+      
+      const endOfDay = new Date(startOfDay);
+      endOfDay.setDate(endOfDay.getDate() + 1);
+      const endTs = endOfDay.getTime();
+
+      q = query(coll, where("timestamp", ">=", startTs), where("timestamp", "<", endTs), orderBy("timestamp", "desc"), limit(300));
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(doc => doc.data());
-      
-      if (docs.length > 0) {
-        setHistory([...docs].reverse()); // Reverse for chronological order on chart
-        
-        // Calculate Statistics
-        const hrs = docs.map(d => d.hr);
-        const avg = Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length);
-        const max = Math.max(...hrs);
-        setStats({ avgHr: avg, maxHr: max });
-      } else {
-        setHistory([]);
-        setStats({ avgHr: 0, maxHr: 0 });
-      }
+      setHistoryDocs([...docs].reverse()); 
     });
 
     return () => unsubscribe();
-  }, [filter]);
+  }, [viewMode]);
 
-  // Chart preparation
+  useEffect(() => {
+    if (historyDocs.length > 0) {
+      let values = [];
+      if (activeMetric === 'hr') values = historyDocs.map(d => Number(d.hr));
+      if (activeMetric === 'steps') values = historyDocs.map(d => Number(d.steps));
+      if (activeMetric === 'spo2') values = historyDocs.map(d => Number(d.spo2 || 0));
+
+      const validValues = values.filter(v => !isNaN(v) && v !== 0);
+      if (validValues.length > 0) {
+        const sum = validValues.reduce((a, b) => a + b, 0);
+        const avg = sum / validValues.length;
+        const max = Math.max(...validValues);
+        setStats({ avg, max });
+      } else {
+        setStats({ avg: 0, max: 0 });
+      }
+    } else {
+      setStats({ avg: 0, max: 0 });
+    }
+  }, [historyDocs, activeMetric]);
+
+  const config = metricConfig[activeMetric];
+
   const chartData = {
-    labels: history.map(h => {
+    labels: historyDocs.map(h => {
       const d = new Date(h.timestamp);
-      // For short intervals (live/today), show just time. Otherwise show date+time.
-      if (filter === 'live' || filter === 'today') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: filter === 'live' ? '2-digit' : undefined });
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return viewMode === 'live' 
+        ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }),
     datasets: [
       {
-        label: 'Heart Rate (BPM)',
-        data: history.map(h => h.hr),
-        borderColor: '#ff4b5c',
-        backgroundColor: 'rgba(255, 75, 92, 0.15)',
+        label: config.label,
+        data: historyDocs.map(h => {
+           if (activeMetric === 'hr') return h.hr;
+           if (activeMetric === 'steps') return h.steps;
+           if (activeMetric === 'spo2') return h.spo2;
+           return 0;
+        }),
+        borderColor: config.color,
+        backgroundColor: config.bgColor,
         borderWidth: 2,
-        pointRadius: filter === 'live' ? 3 : 0, // hide dots for large datasets to look cleaner
+        pointRadius: viewMode === 'live' ? 4 : 0, // clean look for long histories
         pointHoverRadius: 6,
         tension: 0.3,
         fill: true,
@@ -155,10 +173,27 @@ function App() {
           <h2>Mi<span>Admin</span></h2>
         </div>
         <div className="sidebar-menu">
-          <div className="menu-item active">📊 Dashboard & Analytics</div>
-          <div className="menu-item">👤 Patient List</div>
-          <div className="menu-item">🔔 Alerts</div>
-          <div className="menu-item">⚙️ Settings</div>
+          <div className="section-label">Monitoring</div>
+          <div 
+            className={`menu-item ${viewMode === 'live' ? 'active' : ''}`}
+            onClick={() => setViewMode('live')}
+          >
+            🔴 Live Dashboard
+          </div>
+          
+          <div className="section-label">Daily History</div>
+          {pastDays.map((date, idx) => {
+            const timestampStr = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime().toString();
+            return (
+              <div 
+                key={idx}
+                className={`menu-item ${viewMode === timestampStr ? 'active-history' : ''}`}
+                onClick={() => setViewMode(timestampStr)}
+              >
+                📅 {formatDateLabel(date)}
+              </div>
+            );
+          })}
         </div>
       </aside>
 
@@ -166,15 +201,16 @@ function App() {
       <main className="main-content">
         <header className="topbar">
           <div className="page-title">
-            <h1>Health Monitoring</h1>
-            <p>Real-time telemetry and historical analysis</p>
+            <h1>Activity Monitoring</h1>
+            <p>{viewMode === 'live' ? 'Real-time sensor telemetry' : `Displaying summary data for ${formatDateLabel(new Date(parseInt(viewMode)))}`}</p>
           </div>
           <div className="status-badge">
-            <span className="dot"></span> System Online
+            <span className={viewMode === 'live' ? "dot" : ""}></span> 
+            {viewMode === 'live' ? 'Live System Online' : 'Historical Data View'}
           </div>
         </header>
 
-        {/* Global Live Stats */}
+        {/* Global Live Stats (Always up to date) */}
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-header">
@@ -186,10 +222,10 @@ function App() {
           
           <div className="stat-card">
             <div className="stat-header">
-              <span>Steps Taken Today</span>
+              <span>Current Daily Steps</span>
               <span className="color-steps">👟</span>
             </div>
-            <h2 className="stat-value">{currentData.steps.toLocaleString()}</h2>
+            <h2 className="stat-value">{Number(currentData.steps).toLocaleString()}</h2>
           </div>
 
           <div className="stat-card">
@@ -197,39 +233,55 @@ function App() {
               <span>Current Blood Oxygen</span>
               <span className="color-spo2">💨</span>
             </div>
-            <h2 className="stat-value">{currentData.spo2}<span>%</span></h2>
+            <h2 className="stat-value">{Number(currentData.spo2 || 0).toFixed(1)}<span>%</span></h2>
           </div>
         </div>
 
-        {/* Analytics & History Section */}
+        {/* Analytics Section with Metric Tabs */}
         <section className="analytics-section">
           <div className="analytics-header">
-            <h3>Heart Rate Analytics</h3>
-            <div className="filter-tabs">
-              <button className={`filter-btn ${filter === 'live' ? 'active' : ''}`} onClick={() => setFilter('live')}>Live</button>
-              <button className={`filter-btn ${filter === 'today' ? 'active' : ''}`} onClick={() => setFilter('today')}>Today</button>
-              <button className={`filter-btn ${filter === 'yesterday' ? 'active' : ''}`} onClick={() => setFilter('yesterday')}>Yesterday</button>
-              <button className={`filter-btn ${filter === 'week' ? 'active' : ''}`} onClick={() => setFilter('week')}>1 Week</button>
+            <h3>Detailed Chart Analysis</h3>
+            <div className="metric-tabs">
+              <button 
+                className={`metric-btn tab-hr ${activeMetric === 'hr' ? 'active' : ''}`} 
+                onClick={() => setActiveMetric('hr')}
+              >
+                ❤️ Heart Rate
+              </button>
+              <button 
+                className={`metric-btn tab-steps ${activeMetric === 'steps' ? 'active' : ''}`} 
+                onClick={() => setActiveMetric('steps')}
+              >
+                👟 Steps
+              </button>
+              <button 
+                className={`metric-btn tab-spo2 ${activeMetric === 'spo2' ? 'active' : ''}`} 
+                onClick={() => setActiveMetric('spo2')}
+              >
+                💨 Oxygen
+              </button>
             </div>
           </div>
 
-          {/* Sub-stats for the selected timeframe */}
           <div className="stats-grid" style={{ marginBottom: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-            <div className="stat-card" style={{ padding: '1rem' }}>
-              <div className="stat-header" style={{ marginBottom: '0.5rem' }}>Average HR</div>
-              <h2 className="stat-value" style={{ fontSize: '1.75rem' }}>{stats.avgHr}<span>BPM</span></h2>
+            <div className="stat-card" style={{ padding: '1rem', backgroundColor: config.bgColor, borderColor: 'transparent' }}>
+              <div className="stat-header" style={{ marginBottom: '0.5rem', color: '#fff' }}>Average {config.label.split(' ')[0]}</div>
+              <h2 className="stat-value" style={{ fontSize: '1.75rem', color: config.color }}>
+                {config.format(stats.avg)}
+              </h2>
             </div>
             <div className="stat-card" style={{ padding: '1rem' }}>
-              <div className="stat-header" style={{ marginBottom: '0.5rem' }}>Peak Max HR</div>
-              <h2 className="stat-value" style={{ fontSize: '1.75rem' }}>{stats.maxHr}<span>BPM</span></h2>
+              <div className="stat-header" style={{ marginBottom: '0.5rem' }}>Peak {config.label.split(' ')[0]}</div>
+              <h2 className="stat-value" style={{ fontSize: '1.75rem' }}>
+                {config.format(stats.max)}
+              </h2>
             </div>
             <div className="stat-card" style={{ padding: '1rem' }}>
-              <div className="stat-header" style={{ marginBottom: '0.5rem' }}>Data Points</div>
-              <h2 className="stat-value" style={{ fontSize: '1.75rem' }}>{history.length}</h2>
+              <div className="stat-header" style={{ marginBottom: '0.5rem' }}>Data Samples</div>
+              <h2 className="stat-value" style={{ fontSize: '1.75rem' }}>{historyDocs.length}</h2>
             </div>
           </div>
 
-          {/* Main Chart */}
           <div className="chart-wrapper">
             <Line data={chartData} options={chartOptions} />
           </div>
