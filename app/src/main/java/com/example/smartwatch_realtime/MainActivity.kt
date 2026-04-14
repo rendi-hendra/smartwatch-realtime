@@ -131,10 +131,14 @@ class MainActivity : AppCompatActivity() {
         pollingJob = lifecycleScope.launch {
             while (true) {
                 try {
+                    // 🚀 Fetch Real Data from Health Connect
+                    val hrLong = healthConnectManager.readHeartRate()
+                    val stepsLong = healthConnectManager.readSteps()
+                    val spo2Double = healthConnectManager.readSpO2()
 
-                    val hr = (60..100).random()
-                    val steps = (0..10000).random()
-                    val spo2 = (95..99).random() + Math.random()
+                    val hr = hrLong?.toInt() ?: 0
+                    val steps = stepsLong?.toInt() ?: 0
+                    val spo2 = spo2Double ?: 0.0
 
                     val spo2Formatted = String.format("%.1f", spo2)
 
