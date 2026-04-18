@@ -12,7 +12,11 @@ material = "1.10.0"
 activity = "1.8.0"
 constraintlayout = "2.1.4"
 health-connect = "1.1.0-alpha11"
+health-connect-testing = "1.0.0-alpha03"
 socket-io = "2.1.1"
+coroutines = "1.7.3"
+work = "2.9.0"
+lifecycle = "2.8.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,6 +33,12 @@ androidx-activity = { group = "androidx.activity", name = "activity", version.re
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 health-connect-client = { group = "androidx.health.connect", name = "connect-client", version.ref = "health-connect" }
 socket-io-client = { group = "io.socket", name = "socket.io-client", version.ref = "socket-io" }
+health-connect-testing = { group = "androidx.health.connect", name = "connect-testing", version.ref = "health-connect-testing" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+mockito-core = { group = "org.mockito", name = "mockito-core", version = "5.5.0" }
+mockito-inline = { group = "org.mockito", name = "mockito-inline", version = "5.2.0" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
