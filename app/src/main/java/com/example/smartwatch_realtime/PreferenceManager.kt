@@ -12,15 +12,12 @@ class PreferenceManager(context: Context) {
         private const val KEY_DEVICE_NAME = "device_name"
         private const val KEY_LAST_SYNC_TIME = "last_sync_time"
         private const val KEY_REALTIME_SYNC = "realtime_sync"
+        private const val KEY_SAVED_DEVICES = "saved_devices"
     }
 
-    fun getDeviceId(): String {
-        var id = sharedPreferences.getString(KEY_DEVICE_ID, null)
-        if (id == null) {
-            id = java.util.UUID.randomUUID().toString()
-            setDeviceId(id)
-        }
-        return id
+    fun getDeviceId(): String? {
+        // Return null if not set yet, handled by activity later.
+        return sharedPreferences.getString(KEY_DEVICE_ID, null)
     }
 
     fun setDeviceId(deviceId: String) {
@@ -49,5 +46,23 @@ class PreferenceManager(context: Context) {
 
     fun setRealtimeSync(enabled: Boolean) {
         sharedPreferences.edit().putBoolean(KEY_REALTIME_SYNC, enabled).apply()
+    }
+
+    // New multi-device functions:
+    fun getSavedDevices(): Set<String> {
+        val devices = sharedPreferences.getStringSet(KEY_SAVED_DEVICES, null)
+        return devices ?: emptySet()
+    }
+
+    fun addSavedDevice(deviceId: String) {
+        val devices = getSavedDevices().toMutableSet()
+        devices.add(deviceId)
+        sharedPreferences.edit().putStringSet(KEY_SAVED_DEVICES, devices).apply()
+    }
+
+    fun removeSavedDevice(deviceId: String) {
+        val devices = getSavedDevices().toMutableSet()
+        devices.remove(deviceId)
+        sharedPreferences.edit().putStringSet(KEY_SAVED_DEVICES, devices).apply()
     }
 }

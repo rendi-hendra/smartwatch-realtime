@@ -103,5 +103,31 @@ class HealthConnectManager(
         return response.records.sumOf { it.energy.inKilocalories }
     }
 
+    suspend fun readDeviceModel(startTime: Instant? = null): String? {
+        // Cari dari data seminggu ke belakang agar lebih banyak peluang mendapat meta data
+        val start = startTime ?: Instant.now().minus(7, ChronoUnit.DAYS)
+        val endTime = Instant.now()
+        
+        return try {
+            val response = healthConnectClient.readRecords(
+                ReadRecordsRequest(
+                    recordType = HeartRateRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(start, endTime)
+                )
+            )
+            val device = response.records.lastOrNull()?.metadata?.device
+            if (device != null) {
+                val manufacturer = device.manufacturer ?: ""
+                val model = device.model ?: ""
+                val fullName = "$manufacturer $model".trim()
+                if (fullName.isNotEmpty()) fullName else null
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("HealthConnect", "Gagal membaca model jam: ${e.message}")
+            null
+        }
+    }
 
 }

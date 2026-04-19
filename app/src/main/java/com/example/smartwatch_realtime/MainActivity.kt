@@ -57,9 +57,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.headerContent)) { v, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.headerBg)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            v.setPadding(0, systemBars.top, 0, 0)
             insets
         }
 
@@ -192,6 +192,10 @@ class MainActivity : AppCompatActivity() {
             if (newName.isNotEmpty()) {
                 preferenceManager.setDeviceName(newName)
                 updateDeviceNameLabel()
+                val deviceId = preferenceManager.getDeviceId()
+                if (deviceId != null) {
+                    database.child("devices").child(deviceId).child("deviceName").setValue(newName)
+                }
                 android.widget.Toast.makeText(this, "Nama diperbarui!", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
@@ -215,7 +219,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun syncDeviceDetails() {
-        val deviceId = preferenceManager.getDeviceId()
+        val deviceId = preferenceManager.getDeviceId() ?: return
         val deviceName = preferenceManager.getDeviceName() ?: "Unknown Device"
         val timestamp = System.currentTimeMillis()
 
@@ -312,6 +316,23 @@ class MainActivity : AppCompatActivity() {
                         tvHrv.text = hrvFormatted + " ms"
                         tvCalories.text = caloriesFormatted + " kcal"
 
+                        // Otomatis melengkapi Tipe Jam Tangan jika belum tertulis
+                        val currentName = preferenceManager.getDeviceName() ?: "Unknown Device"
+                        if (!currentName.contains("(") && !currentName.contains(")")) {
+                            val detectedModel = healthConnectManager.readDeviceModel()
+                            if (detectedModel != null) {
+                                val newName = "$currentName ($detectedModel)"
+                                preferenceManager.setDeviceName(newName)
+                                updateDeviceNameLabel() // Update nama di UI
+                                
+                                val deviceId = preferenceManager.getDeviceId()
+                                if (deviceId != null) {
+                                    database.child("devices").child(deviceId).child("deviceName").setValue(newName)
+                                    Log.d("SmartwatchApp", "Model otomatis diset: $newName")
+                                }
+                            }
+                        }
+
                         // Send all data to Realtime Database
                         sendDataToRealtimeDatabase(hr, steps, spo2Formatted, hrvFormatted, caloriesFormatted)
 
@@ -328,7 +349,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendDataToRealtimeDatabase(hr: Int, steps: Int, spo2: String, hrv: String, calories: String) {
-        val deviceId = preferenceManager.getDeviceId()
+        val deviceId = preferenceManager.getDeviceId() ?: return
         val timestamp = System.currentTimeMillis()
         
         val data = hashMapOf(

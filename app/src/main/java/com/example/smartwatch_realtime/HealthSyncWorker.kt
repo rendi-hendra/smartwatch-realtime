@@ -26,16 +26,14 @@ class HealthSyncWorker(
                 return Result.failure()
             }
 
-            val deviceId = preferenceManager.getDeviceId()
-            val lastSync = preferenceManager.getLastSyncTime()
-            val startTime = if (lastSync > 0) Instant.ofEpochMilli(lastSync) else null
+            val deviceId = preferenceManager.getDeviceId() ?: return Result.failure()
             
-            // Fetch current data from Health Connect since last sync
-            val hr = healthConnectManager.readHeartRate(startTime)
-            val steps = healthConnectManager.readSteps(startTime)
-            val spo2 = healthConnectManager.readSpO2(startTime)
-            val hrv = healthConnectManager.readHRV(startTime)
-            val calories = healthConnectManager.readCalories(startTime)
+            // Fetch current data from Health Connect (gunakan default window)
+            val hr = healthConnectManager.readHeartRate()
+            val steps = healthConnectManager.readSteps()
+            val spo2 = healthConnectManager.readSpO2()
+            val hrv = healthConnectManager.readHRV()
+            val calories = healthConnectManager.readCalories()
 
             val timestamp = System.currentTimeMillis()
 
