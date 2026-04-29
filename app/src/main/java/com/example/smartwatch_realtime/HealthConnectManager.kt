@@ -11,8 +11,11 @@ import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 class HealthConnectManager(
@@ -40,7 +43,8 @@ class HealthConnectManager(
     }
 
     suspend fun readHeartRate(startTime: Instant? = null): Long? {
-        val start = startTime ?: Instant.now().minus(5, ChronoUnit.MINUTES)
+        // Look back 1 hour (optimized for 5-minute polling)
+        val start = startTime ?: Instant.now().minus(1, ChronoUnit.HOURS)
         val endTime = Instant.now()
         val response = healthConnectClient.readRecords(
             ReadRecordsRequest(
@@ -48,24 +52,33 @@ class HealthConnectManager(
                 timeRangeFilter = TimeRangeFilter.between(start, endTime)
             )
         )
-        // Return latest HR
-        return response.records.lastOrNull()?.samples?.lastOrNull()?.beatsPerMinute
+        // Return the latest sample based on exact time
+        return response.records
+            .flatMap { it.samples }
+            .maxByOrNull { it.time }
+            ?.beatsPerMinute
     }
 
     suspend fun readSteps(startTime: Instant? = null): Long? {
-        val start = startTime ?: Instant.now().truncatedTo(ChronoUnit.DAYS)
+        val start = startTime ?: LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant()
         val endTime = Instant.now()
-        val response = healthConnectClient.readRecords(
-            ReadRecordsRequest(
-                recordType = StepsRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(start, endTime)
+        return try {
+            val response = healthConnectClient.aggregate(
+                AggregateRequest(
+                    metrics = setOf(StepsRecord.COUNT_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(start, endTime)
+                )
             )
-        )
-        return response.records.sumOf { it.count }
+            response[StepsRecord.COUNT_TOTAL] ?: 0L
+        } catch (e: Exception) {
+            Log.e("HealthConnect", "Error reading steps: ${e.message}")
+            0L
+        }
     }
 
     suspend fun readSpO2(startTime: Instant? = null): Double? {
-        val start = startTime ?: Instant.now().minus(1, ChronoUnit.DAYS)
+        // Look back 1 hour
+        val start = startTime ?: Instant.now().minus(1, ChronoUnit.HOURS)
         val endTime = Instant.now()
         val response = healthConnectClient.readRecords(
             ReadRecordsRequest(
@@ -80,7 +93,8 @@ class HealthConnectManager(
     }
 
     suspend fun readHRV(startTime: Instant? = null): Double? {
-        val start = startTime ?: Instant.now().minus(1, ChronoUnit.DAYS)
+        // Look back 1 hour
+        val start = startTime ?: Instant.now().minus(1, ChronoUnit.HOURS)
         val endTime = Instant.now()
         val response = healthConnectClient.readRecords(
             ReadRecordsRequest(
@@ -92,15 +106,20 @@ class HealthConnectManager(
     }
 
     suspend fun readCalories(startTime: Instant? = null): Double? {
-        val start = startTime ?: Instant.now().truncatedTo(ChronoUnit.DAYS)
+        val start = startTime ?: LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant()
         val endTime = Instant.now()
-        val response = healthConnectClient.readRecords(
-            ReadRecordsRequest(
-                recordType = ActiveCaloriesBurnedRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(start, endTime)
+        return try {
+            val response = healthConnectClient.aggregate(
+                AggregateRequest(
+                    metrics = setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(start, endTime)
+                )
             )
-        )
-        return response.records.sumOf { it.energy.inKilocalories }
+            response[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+        } catch (e: Exception) {
+            Log.e("HealthConnect", "Error reading calories: ${e.message}")
+            0.0
+        }
     }
 
     suspend fun readDeviceModel(startTime: Instant? = null): String? {

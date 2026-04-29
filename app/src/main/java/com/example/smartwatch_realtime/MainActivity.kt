@@ -1,35 +1,33 @@
 package com.example.smartwatch_realtime
 
+import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.health.connect.client.PermissionController
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import android.Manifest
-import androidx.activity.result.contract.ActivityResultContracts
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.FirebaseDatabase
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.firebase.database.FirebaseDatabase
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.time.Instant
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -38,7 +36,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var healthConnectManager: HealthConnectManager
     private val database = FirebaseDatabase.getInstance().reference
     private lateinit var preferenceManager: PreferenceManager
-    private var pollingJob: Job? = null
 
     // UI Elements
     private lateinit var tvDeviceNameLabel: TextView
@@ -52,6 +49,27 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchRealtime: SwitchMaterial
     private lateinit var btnUpdateNow: Button
     private lateinit var tvLastSync: TextView
+
+    private val syncUpdateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == HealthSyncService.ACTION_SYNC_UPDATE) {
+                val hr = intent.getIntExtra("hr", 0)
+                val steps = intent.getIntExtra("steps", 0)
+                val spo2 = intent.getStringExtra("spo2") ?: "0.0"
+                val hrv = intent.getStringExtra("hrv") ?: "0.0"
+                val calories = intent.getStringExtra("calories") ?: "0.0"
+
+                tvHR.text = hr.toString()
+                tvSteps.text = steps.toString()
+                tvSpo2.text = "$spo2%"
+                tvHrv.text = "$hrv ms"
+                tvCalories.text = "$calories kcal"
+
+                updateDeviceNameLabel()
+                updateLastSyncText()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,11 +90,27 @@ class MainActivity : AppCompatActivity() {
         
         initUI()
         
-        // Setup Background Sync
+        // Setup Background Sync (Fallback using WorkManager)
         setupPeriodicSync()
         
         // Auto-start tracking based on saved preference
-        startService()
+        startServiceIfNeeded()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ContextCompat.registerReceiver(
+            this,
+            syncUpdateReceiver,
+            IntentFilter(HealthSyncService.ACTION_SYNC_UPDATE),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        fetchCurrentDataAndUpdateUI()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(syncUpdateReceiver)
     }
 
     private fun initUI() {
@@ -107,7 +141,8 @@ class MainActivity : AppCompatActivity() {
             if (isChecked) {
                 checkPermissionsAndStart()
             } else {
-                pollingJob?.cancel()
+                val serviceIntent = Intent(this, HealthSyncService::class.java)
+                stopService(serviceIntent)
             }
         }
 
@@ -206,7 +241,7 @@ class MainActivity : AppCompatActivity() {
         builder.show()
     }
 
-    private fun startService() {
+    private fun startServiceIfNeeded() {
         if (!::healthConnectManager.isInitialized) {
             Toast.makeText(this, "Health Connect Manager not initialized.", Toast.LENGTH_LONG).show()
             return
@@ -254,6 +289,7 @@ class MainActivity : AppCompatActivity() {
             startDataPolling()
         } else {
             Toast.makeText(this, "Permissions denied for Health Connect", Toast.LENGTH_SHORT).show()
+            switchRealtime.isChecked = false
         }
     }
 
@@ -261,20 +297,26 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            Log.d("SmartwatchApp", "Background Health Read Permission Granted")
+            Log.d("SmartwatchApp", "Permission Granted")
         } else {
-            Log.w("SmartwatchApp", "Background Health Read Permission Denied")
+            Log.w("SmartwatchApp", "Permission Denied")
         }
     }
 
     private fun checkPermissionsAndStart() {
         lifecycleScope.launch {
             if (healthConnectManager.hasAllPermissions()) {
-                // Also check for background reading permission on Android 14+
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Check for background reading permission on Android 14+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     val bgPermission = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
                     if (checkSelfPermission(bgPermission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                         requestBackgroundPermissionLauncher.launch(bgPermission)
+                    }
+                }
+                // Check for Notification permission on Android 13+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        requestBackgroundPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }
                 startDataPolling()
@@ -285,99 +327,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startDataPolling() {
-        pollingJob?.cancel()
-        pollingJob = lifecycleScope.launch {
-            // Use repeatOnLifecycle to only poll while the activity is at least STARTED
-            // This prevents reading Health Connect while in background which causes crashes
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                while (true) {
-                    try {
-                        // Fetch Real Data from Health Connect (Using default windows for UI display)
-                        val hrLong = healthConnectManager.readHeartRate()
-                        val stepsLong = healthConnectManager.readSteps()
-                        val spo2Double = healthConnectManager.readSpO2()
-                        val hrvDouble = healthConnectManager.readHRV()
-                        val caloriesDouble = healthConnectManager.readCalories()
-                        
-                        val hr = hrLong?.toInt() ?: 0
-                        val steps = stepsLong?.toInt() ?: 0
-                        val spo2 = spo2Double ?: 0.0
-                        val hrv = hrvDouble ?: 0.0
-                        val calories = caloriesDouble ?: 0.0
+        Log.d("SmartwatchApp", "Starting Foreground HealthSyncService")
+        val serviceIntent = Intent(this, HealthSyncService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
+    }
 
-                        val spo2Formatted = String.format("%.1f", spo2)
-                        val hrvFormatted = String.format("%.0f", hrv)
-                        val caloriesFormatted = String.format("%.1f", calories)
+    private fun fetchCurrentDataAndUpdateUI() {
+        lifecycleScope.launch {
+            try {
+                if (healthConnectManager.hasAllPermissions()) {
+                    val hrLong = healthConnectManager.readHeartRate()
+                    val stepsLong = healthConnectManager.readSteps()
+                    val spo2Double = healthConnectManager.readSpO2()
+                    val hrvDouble = healthConnectManager.readHRV()
+                    val caloriesDouble = healthConnectManager.readCalories()
 
-                        // Update UI
-                        tvHR.text = hr.toString()
-                        tvSteps.text = steps.toString()
-                        tvSpo2.text = spo2Formatted + "%"
-                        tvHrv.text = hrvFormatted + " ms"
-                        tvCalories.text = caloriesFormatted + " kcal"
+                    val hr = hrLong?.toInt() ?: 0
+                    val steps = stepsLong?.toInt() ?: 0
+                    val spo2 = spo2Double ?: 0.0
+                    val hrv = hrvDouble ?: 0.0
+                    val calories = caloriesDouble ?: 0.0
 
-                        // Otomatis melengkapi Tipe Jam Tangan jika belum tertulis
-                        val currentName = preferenceManager.getDeviceName() ?: "Unknown Device"
-                        if (!currentName.contains("(") && !currentName.contains(")")) {
-                            val detectedModel = healthConnectManager.readDeviceModel()
-                            if (detectedModel != null) {
-                                val newName = "$currentName ($detectedModel)"
-                                preferenceManager.setDeviceName(newName)
-                                updateDeviceNameLabel() // Update nama di UI
-                                
-                                val deviceId = preferenceManager.getDeviceId()
-                                if (deviceId != null) {
-                                    database.child("devices").child(deviceId).child("deviceName").setValue(newName)
-                                    Log.d("SmartwatchApp", "Model otomatis diset: $newName")
-                                }
-                            }
-                        }
+                    val spo2Formatted = String.format(java.util.Locale.US, "%.1f", spo2)
+                    val hrvFormatted = String.format(java.util.Locale.US, "%.0f", hrv)
+                    val caloriesFormatted = String.format(java.util.Locale.US, "%.1f", calories)
 
-                        // Send all data to Realtime Database
-                        sendDataToRealtimeDatabase(hr, steps, spo2Formatted, hrvFormatted, caloriesFormatted)
+                    tvHR.text = hr.toString()
+                    tvSteps.text = steps.toString()
+                    tvSpo2.text = "$spo2Formatted%"
+                    tvHrv.text = "$hrvFormatted ms"
+                    tvCalories.text = "$caloriesFormatted kcal"
 
-                        Log.d("SmartwatchApp", "Data updated (1-min poll) and sent to RTDB")
-
-                    } catch (e: Exception) {
-                        Log.e("SmartwatchApp", "Error polling data: ${e.message}")
-                    }
-
-                    delay(60000) // Change to 1 minute (Step 1)
+                    updateDeviceNameLabel()
+                    updateLastSyncText()
                 }
+            } catch (e: Exception) {
+                Log.e("SmartwatchApp", "Error fetching initial data", e)
             }
         }
-    }
-
-    private fun sendDataToRealtimeDatabase(hr: Int, steps: Int, spo2: String, hrv: String, calories: String) {
-        val deviceId = preferenceManager.getDeviceId() ?: return
-        val timestamp = System.currentTimeMillis()
-        
-        val data = hashMapOf(
-            "heartRate" to hr,
-            "steps" to steps,
-            "oxygenSaturation" to spo2.replace("%", "").toDoubleOrNull(),
-            "heartRateVariabilityRmssd" to hrv.replace(" ms", "").toDoubleOrNull(),
-            "activeCaloriesBurned" to calories.replace(" kcal", "").toDoubleOrNull()
-        )
-
-        // Path: health_data/{deviceId}/{timestamp}
-        database.child("health_data").child(deviceId).child(timestamp.toString())
-            .setValue(data)
-            .addOnSuccessListener {
-                Log.d("FIREBASE", "Health data synced to RTDB")
-                // Update lastSync in devices/{deviceId}
-                database.child("devices").child(deviceId).child("lastSync").setValue(timestamp)
-                // Update local lastSyncTime
-                preferenceManager.setLastSyncTime(timestamp)
-                updateLastSyncText()
-            }
-            .addOnFailureListener { e ->
-                Log.e("FIREBASE", "Gagal kirim ke Realtime Database", e)
-            }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        pollingJob?.cancel()
     }
 }

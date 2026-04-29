@@ -1,0 +1,55 @@
+Name: Pixel_5
+CPU/ABI: x86_64
+Path: C:\Users\rendi\.android\avd\Pixel_5.avd
+Target: google_apis [Google APIs] (API level 1000)
+Skin: pixel_5
+SD Card: 512M
+AvdId: Pixel_5
+PlayStore.enabled: false
+avd.ini.displayname: Pixel 5
+avd.ini.encoding: UTF-8
+disk.dataPartition.size: 6G
+fastboot.chosenSnapshotFile: 
+fastboot.forceChosenSnapshotBoot: no
+fastboot.forceColdBoot: no
+fastboot.forceFastBoot: yes
+hw.accelerometer: yes
+hw.arc: false
+hw.audioInput: yes
+hw.battery: yes
+hw.camera.back: virtualscene
+hw.camera.front: emulated
+hw.cpu.ncore: 4
+hw.dPad: no
+hw.device.hash2: MD5:12ab7fcb681cafc1697d019f385bf3b9
+hw.device.manufacturer: Google
+hw.device.name: pixel_5
+hw.gps: yes
+hw.gpu.enabled: yes
+hw.gpu.mode: auto
+hw.gyroscope: yes
+hw.initialOrientation: portrait
+hw.keyboard: yes
+hw.lcd.density: 440
+hw.lcd.height: 2340
+hw.lcd.width: 1080
+hw.mainKeys: no
+hw.ramSize: 2048
+hw.sdCard: yes
+hw.sensors.light: yes
+hw.sensors.magnetic_field: yes
+hw.sensors.orientation: yes
+hw.sensors.pressure: yes
+hw.sensors.proximity: yes
+hw.trackBall: no
+image.sysdir.1: system-images\android-37.0\google_apis_ps16k\x86_64\
+runtime.network.latency: none
+runtime.network.speed: full
+showDeviceFrame: yes
+skin.dynamic: yes
+tag.display: Google APIs
+tag.displaynames: Google APIs,16 KB Page Size,AI Glasses Compatible
+tag.id: google_apis
+tag.ids: google_apis,page_size_16kb,ai_glasses_compatible
+target: android-37.0
+vm.heapSize: 256
