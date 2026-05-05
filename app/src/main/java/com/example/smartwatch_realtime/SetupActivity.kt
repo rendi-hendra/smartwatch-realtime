@@ -4,7 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.textfield.TextInputEditText
+import android.widget.EditText
 
 class SetupActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -12,7 +12,7 @@ class SetupActivity : AppCompatActivity() {
         setContentView(R.layout.activity_setup)
 
         val preferenceManager = PreferenceManager(this)
-        val etDeviceName = findViewById<TextInputEditText>(R.id.etDeviceName)
+        val etDeviceName = findViewById<EditText>(R.id.etDeviceName)
         val btnContinue = findViewById<Button>(R.id.btnContinue)
 
         btnContinue.setOnClickListener {

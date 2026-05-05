@@ -286,7 +286,7 @@ class MainActivity : AppCompatActivity() {
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
         if (granted.containsAll(healthConnectManager.permissions)) {
-            startDataPolling()
+            checkPermissionsAndStart()
         } else {
             Toast.makeText(this, "Permissions denied for Health Connect", Toast.LENGTH_SHORT).show()
             switchRealtime.isChecked = false
@@ -298,27 +298,33 @@ class MainActivity : AppCompatActivity() {
     ) { isGranted: Boolean ->
         if (isGranted) {
             Log.d("SmartwatchApp", "Permission Granted")
+            checkPermissionsAndStart()
         } else {
             Log.w("SmartwatchApp", "Permission Denied")
+            Toast.makeText(this, "Izin diperlukan untuk melanjutkan", Toast.LENGTH_LONG).show()
+            switchRealtime.isChecked = false
         }
     }
 
     private fun checkPermissionsAndStart() {
         lifecycleScope.launch {
             if (healthConnectManager.hasAllPermissions()) {
-                // Check for background reading permission on Android 14+
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    val bgPermission = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
-                    if (checkSelfPermission(bgPermission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                        requestBackgroundPermissionLauncher.launch(bgPermission)
+                // Activity Recognition is required for ForegroundService type="health" (Android 14+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        requestBackgroundPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                        return@launch
                     }
                 }
+
                 // Check for Notification permission on Android 13+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                         requestBackgroundPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        return@launch
                     }
                 }
+
                 startDataPolling()
             } else {
                 requestPermissionLauncher.launch(healthConnectManager.permissions)
